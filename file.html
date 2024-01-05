@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Order Calculator</title>
+    <script src="https://cdn.skypack.dev/pdf-lib"></script>
+</head>
+<body>
+
+<h1>Reorder for Imposing</h1>
+    <p>Reorder the pages of a PDF before creating an N-UP layout</p>
+
+<form id="orderForm" onsubmit="calculateOrder(); return false;">
+    <label for="numPages">Number of Pages:</label>
+    <input type="number" id="numPages" name="numPages" required>
+    <label for="pdfFile">Upload PDF:</label>
+    <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required>
+    <button type="button" onclick="calculateOrder()">Calculate Order</button>
+</form>
+
+<p id="result"></p>
+
+<script>
+    async function calculateOrder() {
+        // Get the number of pages and PDF file from the form
+        var numPages = document.getElementById('numPages').value;
+        var pdfFile = document.getElementById('pdfFile').files[0];
+
+        // Read the PDF file using pdf-lib.js
+        const pdfDoc = await PDFLib.PDFDocument.load(await pdfFile.arrayBuffer());
+
+        // Anzahl der Nutzen pro Seite
+        var ANPS = 4;
+
+        // Number of final imposed pages
+        var AFP = Math.ceil(numPages / ANPS);
+
+        // Generate reordering string
+        var ORDER = [];
+
+        // Loop through each place in the final pdf and
+        // figure out which page should go in its place.
+        for (var i = 0; i < numPages; i++) {
+            // Round is the number on which imposed page we are
+            var ROUND = Math.floor(i / ANPS);
+
+            // POS is the position on an imposed page that is possible
+            // (assumes 2x2 layout)
+            var POS = i % ANPS;
+
+            // If Round is Odd, the pages need to be horizontally flipped
+            // To check if it is odd we divide by two and check the remainder
+            var REMAINDER = ROUND % 2;
+            if (REMAINDER === 1) {
+                switch (POS) {
+                    case 0:
+                        POS = 1;
+                        break;
+                    case 1:
+                        POS = 0;
+                        break;
+                    case 2:
+                        POS = 3;
+                        break;
+                    case 3:
+                        POS = 2;
+                        break;
+                }
+            }
+
+            // Now we can calculate the final page position
+            // Plus one!
+            var FPOS = AFP * POS + ROUND + 1;
+
+            ORDER.push(pdfDoc.getPage(FPOS - 1));
+        }
+
+        // Create a new PDF document with the reordered pages
+        const newPdfDoc = await PDFLib.PDFDocument.create();
+        for (const page of ORDER) {
+            const copiedPage = await newPdfDoc.copyPages(pdfDoc, [page]);
+            newPdfDoc.addPage(copiedPage[0]);
+        }
+
+        // Generate a blob for the new PDF document
+        const pdfBytes = await newPdfDoc.save();
+
+        // Display the result or download the new PDF
+        const resultContainer = document.getElementById('result');
+        resultContainer.innerHTML = `<a href="${URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))}" download="reordered_pdf.pdf">Download Reordered PDF</a>`;
+    }
+</script>
+
+</body>
+</html>
